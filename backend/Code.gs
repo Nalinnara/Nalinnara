@@ -267,7 +267,7 @@ function doGet(e) {
 
     const action = String(e.parameter.action).trim();
 
-    // ðŸ”“ PUBLIC ONLY
+    // 🔓 PUBLIC ONLY
     if (action === "products") {
       return json({
         success: true,
@@ -275,7 +275,7 @@ function doGet(e) {
       });
     }
 
-    // âŒ admin à¸«à¹‰à¸²à¸¡à¸œà¹ˆà¸²à¸™ GET
+    // ❌ admin ห้ามผ่าน GET
     return json({
       success: false,
       message: "Forbidden"
@@ -292,7 +292,7 @@ function doGet(e) {
 
 
 function getProducts() {
-  // ðŸ”’ FIX: Web App à¸•à¹‰à¸­à¸‡à¸­à¹‰à¸²à¸‡à¸­à¸´à¸‡ Spreadsheet à¹à¸šà¸šà¸Šà¸±à¸”à¹€à¸ˆà¸™
+  // 🔒 FIX: Web App ต้องอ้างอิง Spreadsheet แบบชัดเจน
   const SPREADSHEET_ID = "1zSDkkJc8uVZSba8FFlPeg9NPEervEqa7durWkaDbv-I";
   const variantHeaderInfo = ensureProductsVariantHeaders_(getSS());
   if (variantHeaderInfo.appended.length) {
@@ -300,30 +300,30 @@ function getProducts() {
   }
   const rows = getCachedPublicProductRows();
 
-  // âŒ à¹„à¸¡à¹ˆà¸¡à¸µà¸‚à¹‰à¸­à¸¡à¸¹à¸¥à¸ˆà¸£à¸´à¸‡ (à¸¡à¸µà¹à¸•à¹ˆ header)
+  // ❌ ไม่มีข้อมูลจริง (มีแต่ header)
   if (rows.length < 2) {
     return [];
   }
 
-  const headers = rows.shift().map(h => String(h || "").trim()); // à¸¥à¸š header
+  const headers = rows.shift().map(h => String(h || "").trim()); // ลบ header
   const variantCol = getProductVariantColumnMap_(headers);
 
   return rows
     .map(r => {
       const productId = String(r[0] || "").trim();
-      if (!productId) return null; // âŒ à¸à¸±à¸™à¹à¸–à¸§à¸§à¹ˆà¸²à¸‡
+      if (!productId) return null; // ❌ กันแถวว่าง
 
       const name   = String(r[1] || "").trim();
       const price  = Number(r[2]) || 0;
       const stock  = Number(r[3]) || 0;
 
-      // ðŸ–¼ image (column E)
+      // 🖼 image (column E)
       const image =
         typeof r[4] === "string" && r[4].startsWith("http")
           ? r[4].trim()
           : "";
 
-      // ðŸ”“ active (column F)
+      // 🔓 active (column F)
       const active =
         r[5] === true ||
         r[5] === "TRUE" ||
@@ -332,7 +332,7 @@ function getProducts() {
 
       if (!active) return null;
 
-      // ðŸŸ¢ status (column G)
+      // 🟢 status (column G)
       const status = String(r[6] || "").trim();
       return {
         productId,
@@ -347,7 +347,7 @@ function getProducts() {
         ...getProductVariantMetadata_(r, variantCol)
       };
     })
-    .filter(Boolean); // âœ… à¸•à¸±à¸” null (à¹à¸–à¸§à¸žà¸±à¸‡ / à¸§à¹ˆà¸²à¸‡)
+    .filter(Boolean); // ✅ ตัด null (แถวพัง / ว่าง)
 }
 
 function getAdminProducts() {
@@ -366,7 +366,7 @@ function getAdminProducts() {
 
   const headers = rows.shift().map(h => String(h || "").trim());
 
-  // ðŸ”´ CHANGED: à¸­à¹ˆà¸²à¸™à¸•à¸²à¸¡à¸Šà¸·à¹ˆà¸­ header à¸à¹ˆà¸­à¸™ à¹€à¸žà¸·à¹ˆà¸­à¸à¸±à¸™à¸„à¸­à¸¥à¸±à¸¡à¸™à¹Œà¹€à¸¥à¸·à¹ˆà¸­à¸™
+  // 🔴 CHANGED: อ่านตามชื่อ header ก่อน เพื่อกันคอลัมน์เลื่อน
   const col = {
     productId: headers.indexOf("productId"),
     name: headers.indexOf("name"),
@@ -388,7 +388,7 @@ function getAdminProducts() {
 
   return rows
     .map(r => {
-      // ðŸ”´ CHANGED: fallback à¹€à¸›à¹‡à¸™ index à¹€à¸”à¸´à¸¡ à¸«à¸²à¸ header à¸¢à¸±à¸‡à¹„à¸¡à¹ˆà¸•à¸£à¸‡
+      // 🔴 CHANGED: fallback เป็น index เดิม หาก header ยังไม่ตรง
       const productId = String(
         col.productId > -1 ? r[col.productId] : r[0]
       ).trim();
@@ -454,7 +454,7 @@ function doPost(e) {
 
 
     /* =================================================
-       ðŸ”“ PUBLIC ACTION (NO AUTH REQUIRED)
+       🔓 PUBLIC ACTION (NO AUTH REQUIRED)
     ================================================= */
 
     if (action === "adminLogin") {
@@ -504,7 +504,7 @@ function doPost(e) {
     }
 
     /* =================================================
-       ðŸ” AUTH REQUIRED (ALL BELOW NEED TOKEN)
+       🔐 AUTH REQUIRED (ALL BELOW NEED TOKEN)
     ================================================= */
 
     const token = String(params.token || "").trim();
@@ -512,7 +512,7 @@ function doPost(e) {
       throw new Error("Missing token");
     }
 
-    const auth = requireAuth(token); // â— invalid â†’ throw
+    const auth = requireAuth(token); // ❗ invalid → throw
 
     /* ========= ADD PRODUCT ========= */
     if (action === "addProduct") {
@@ -641,7 +641,7 @@ function doPost(e) {
 
 
     /* =================================================
-       âŒ UNKNOWN ACTION
+       ❌ UNKNOWN ACTION
     ================================================= */
     throw new Error("Invalid action: " + action);
 
@@ -711,7 +711,7 @@ function uploadProductImage(e, auth) {
   const FOLDER_ID = "1tQorLPYSdH1mXHFu9rWdi4I72Zbt_chP";
   const folder = DriveApp.getFolderById(FOLDER_ID);
 
-  // ðŸ”´ CHANGED: à¹€à¸à¹‡à¸š reference à¹€à¸žà¸·à¹ˆà¸­ rollback à¸–à¹‰à¸² share à¹„à¸¡à¹ˆà¸œà¹ˆà¸²à¸™
+  // 🔴 CHANGED: เก็บ reference เพื่อ rollback ถ้า share ไม่ผ่าน
   let file = null;
 
   try {
@@ -731,7 +731,7 @@ function uploadProductImage(e, auth) {
     };
 
   } catch (err) {
-    // ðŸ”´ CHANGED: à¸›à¹‰à¸­à¸‡à¸à¸±à¸™ orphan file à¸–à¹‰à¸² create à¸ªà¸³à¹€à¸£à¹‡à¸ˆà¹à¸•à¹ˆ share à¸žà¸±à¸‡
+    // 🔴 CHANGED: ป้องกัน orphan file ถ้า create สำเร็จแต่ share พัง
     if (file) {
       try {
         file.setTrashed(true);
@@ -740,13 +740,13 @@ function uploadProductImage(e, auth) {
 
     const message = String(err && err.message ? err.message : err);
 
-    // ðŸ”´ CHANGED: à¹‚à¸¢à¸™ error à¹ƒà¸«à¹‰à¸•à¸£à¸‡à¸ªà¸²à¹€à¸«à¸•à¸¸à¸ˆà¸£à¸´à¸‡à¸¡à¸²à¸à¸‚à¸¶à¹‰à¸™
+    // 🔴 CHANGED: โยน error ให้ตรงสาเหตุจริงมากขึ้น
     if (
       message.includes("Access denied") ||
       message.includes("DriveApp")
     ) {
       throw new Error(
-        "à¸­à¸±à¸›à¹‚à¸«à¸¥à¸”à¸£à¸¹à¸›à¹„à¸¡à¹ˆà¸ªà¸³à¹€à¸£à¹‡à¸ˆ: à¸£à¸°à¸šà¸šà¹„à¸¡à¹ˆà¸ªà¸²à¸¡à¸²à¸£à¸–à¹€à¸‚à¹‰à¸²à¸–à¸¶à¸‡ Google Drive à¹„à¸”à¹‰"
+        "อัปโหลดรูปไม่สำเร็จ: ระบบไม่สามารถเข้าถึง Google Drive ได้"
       );
     }
 
@@ -756,7 +756,7 @@ function uploadProductImage(e, auth) {
 
 
 function stockAdjust(token, data) {
-  // ðŸ” AUTH (à¸«à¸±à¸§à¹ƒà¸ˆ)
+  // 🔐 AUTH (หัวใจ)
   const auth = requireAuth(token);
   const by = auth.username;
 
@@ -764,7 +764,7 @@ function stockAdjust(token, data) {
   lock.waitLock(30000);
 
   try {
-  // ðŸ”’ FIX: à¹ƒà¸Šà¹‰ Spreadsheet à¹€à¸”à¸µà¸¢à¸§à¸—à¸±à¹‰à¸‡à¸£à¸°à¸šà¸š
+  // 🔒 FIX: ใช้ Spreadsheet เดียวทั้งระบบ
   const ss = getSS();
   const productSheet = ss.getSheetByName("Products");
   const logSheet = ss.getSheetByName("stock_logs");
@@ -809,7 +809,7 @@ function stockAdjust(token, data) {
       diff,                // qty (delta)
       before,              // before
       after,               // after
-      by,                  // by (à¸ˆà¸²à¸ token)
+      by,                  // by (จาก token)
       "",                  // orderId
       data.reason || "",   // reason
       new Date()           // timestamp
@@ -1245,7 +1245,7 @@ function enforceCreateOrderRateLimit(data) {
 }
 
 function createOrder(data) {
-  // ðŸ”’ FIX: Web App à¸•à¹‰à¸­à¸‡à¸­à¹‰à¸²à¸‡à¸­à¸´à¸‡ Spreadsheet à¹à¸šà¸šà¸Šà¸±à¸”à¹€à¸ˆà¸™
+  // 🔒 FIX: Web App ต้องอ้างอิง Spreadsheet แบบชัดเจน
   /* ================= VALIDATE ROOT ================= */
   if (!data || !Array.isArray(data.items)) {
     throw new Error("Invalid order items");
@@ -1414,21 +1414,21 @@ function createOrder(data) {
 
 
 function json(payload) {
-  // ðŸ”’ normalize null / undefined
+  // 🔒 normalize null / undefined
   if (payload === null || payload === undefined) {
     payload = {};
   }
 
-  // ðŸ”´ à¸«à¹‰à¸²à¸¡à¸ªà¹ˆà¸‡ array à¸•à¸£à¸‡ à¹† (à¸à¸±à¸™à¸žà¸±à¸‡à¹€à¸‡à¸µà¸¢à¸š)
+  // 🔴 ห้ามส่ง array ตรง ๆ (กันพังเงียบ)
   if (Array.isArray(payload)) {
     throw new Error("json() payload must be an object, not array");
   }
 
-  // ðŸ”’ enforce success flag (à¸„à¹ˆà¸²à¹€à¸”à¸µà¸¢à¸§ à¹€à¸Šà¸·à¹ˆà¸­à¸–à¸·à¸­à¹„à¸”à¹‰)
+  // 🔒 enforce success flag (ค่าเดียว เชื่อถือได้)
   const success =
     payload.success === false || payload.error ? false : true;
 
-  // âŒ à¸«à¹‰à¸²à¸¡à¹ƒà¸«à¹‰ success à¸‹à¹‰à¸­à¸™
+  // ❌ ห้ามให้ success ซ้อน
   const { success: _ignored, ...rest } = payload;
 
   return ContentService
@@ -1654,7 +1654,7 @@ function approveOrder(token, orderId) {
 
 
 function rejectOrder(token, orderId) {
-  // ðŸ” AUTH
+  // 🔐 AUTH
   const auth = requireAuth(token);
   const by = auth.username;
 
@@ -1662,7 +1662,7 @@ function rejectOrder(token, orderId) {
   lock.waitLock(30000);
 
   try {
-  // ðŸ”’ FIX: à¹ƒà¸Šà¹‰ Spreadsheet à¹€à¸”à¸µà¸¢à¸§à¸—à¸±à¹‰à¸‡à¸£à¸°à¸šà¸š
+  // 🔒 FIX: ใช้ Spreadsheet เดียวทั้งระบบ
   const ss = getSS();
   const orderSheet = ss.getSheetByName("Orders");
 
@@ -1677,7 +1677,7 @@ function rejectOrder(token, orderId) {
   const rowNumber = orderRowIndex + 2;
   const status = rows[orderRowIndex][3];
 
-  // âŒ à¸›à¹‰à¸­à¸‡à¸à¸±à¸™ reject à¸‹à¹‰à¸³
+  // ❌ ป้องกัน reject ซ้ำ
   if (status !== "PENDING") {
     throw new Error("Order already processed");
   }
@@ -1704,7 +1704,7 @@ function rejectOrder(token, orderId) {
 
 
  function getStockLogs() {
-   // ðŸ”’ FIX: à¹ƒà¸Šà¹‰ Spreadsheet à¹€à¸”à¸µà¸¢à¸§à¸—à¸±à¹‰à¸‡à¸£à¸°à¸šà¸š
+   // 🔒 FIX: ใช้ Spreadsheet เดียวทั้งระบบ
    const sheet = getSS().getSheetByName("stock_logs");
 
    if (!sheet) {
@@ -1719,8 +1719,8 @@ function rejectOrder(token, orderId) {
      let obj = {};
      headers.forEach((h, i) => obj[h] = r[i]);
 
-    // âœ… backward compatibility:
-    // à¸Šà¸µà¸•à¹€à¸à¹ˆà¸²à¹„à¸¡à¹ˆà¸¡à¸µà¸„à¸­à¸¥à¸±à¸¡à¸™à¹Œ reason à¹à¸¥à¸° IN/ADJUST à¹€à¸„à¸¢à¹€à¸­à¸² reason à¹„à¸›à¹ƒà¸ªà¹ˆà¹„à¸§à¹‰à¹ƒà¸™à¸Šà¹ˆà¸­à¸‡ orderId
+    // ✅ backward compatibility:
+    // ชีตเก่าไม่มีคอลัมน์ reason และ IN/ADJUST เคยเอา reason ไปใส่ไว้ในช่อง orderId
     if (!("reason" in obj) || obj.reason === "" || obj.reason == null) {
       if (
         (obj.type === "IN" || obj.type === "ADJUST") &&
@@ -1786,7 +1786,7 @@ function isProductReferencedByPendingOrder(ss, productId) {
 
 function updateProduct(e, auth) {
   try {
-    // ðŸ” AUTH GUARD
+    // 🔐 AUTH GUARD
     if (!auth || !auth.username) {
       throw new Error("Unauthorized");
     }
@@ -1838,7 +1838,7 @@ function updateProduct(e, auth) {
       for (let i = 1; i < data.length; i++) {
         if (String(data[i][0]).trim() === oldProductId) {
 
-          // ðŸ”’ à¸­à¹ˆà¸²à¸™ active à¹à¸¥à¸° stock à¸¥à¹ˆà¸²à¸ªà¸¸à¸”à¸ à¸²à¸¢à¹ƒà¸™ lock
+          // 🔒 อ่าน active และ stock ล่าสุดภายใน lock
           const originalRow = data[i].slice();
           const currentActive = data[i][5]; // column F
           const oldStock = Number(data[i][3]);
@@ -1860,7 +1860,7 @@ function updateProduct(e, auth) {
                 );
               }
 
-              // ðŸ” Duplicate guard
+              // 🔍 Duplicate guard
               const exists = data.slice(1).some(
                 r => String(r[0]).trim() === newProductId
               );
@@ -1868,7 +1868,7 @@ function updateProduct(e, auth) {
                 throw new Error("SKU already exists");
               }
 
-              // ðŸ”„ Update SKU column A
+              // 🔄 Update SKU column A
               sh.getRange(i + 1, 1).setValue(newProductId);
             }
 
@@ -1877,7 +1877,7 @@ function updateProduct(e, auth) {
             sh.getRange(i + 1, 3).setValue(price);         // C: price
             sh.getRange(i + 1, 4).setValue(stock);         // D: stock
             sh.getRange(i + 1, 5).setValue(image);         // E: image
-            sh.getRange(i + 1, 6).setValue(currentActive); // F: active (à¸„à¸‡à¹€à¸”à¸´à¸¡)
+            sh.getRange(i + 1, 6).setValue(currentActive); // F: active (คงเดิม)
             sh.getRange(i + 1, 7).setValue(status);        // G: status
             sh.getRange(i + 1, 10).setValue(note);         // J: note
             sh.getRange(i + 1, 11).setValue(detailsText);   // K: detailsText
@@ -1928,7 +1928,7 @@ function updateProduct(e, auth) {
         }
       }
 
-      throw new Error("à¹„à¸¡à¹ˆà¸žà¸šà¸ªà¸´à¸™à¸„à¹‰à¸²");
+      throw new Error("ไม่พบสินค้า");
     } finally {
       lock.releaseLock();
     }
@@ -1940,7 +1940,7 @@ function updateProduct(e, auth) {
 }
 
 function deleteProduct(e, auth) {
-  // ðŸ” AUTH GUARD
+  // 🔐 AUTH GUARD
   if (!auth || !auth.username) {
     throw new Error("Unauthorized");
   }
@@ -1972,7 +1972,7 @@ function deleteProduct(e, auth) {
           );
         }
 
-        // âŒ HARD DELETE: à¸¥à¸šà¹à¸–à¸§à¸­à¸­à¸à¸ˆà¸²à¸à¸Šà¸µà¸•à¸ˆà¸£à¸´à¸‡
+        // ❌ HARD DELETE: ลบแถวออกจากชีตจริง
         sh.deleteRow(i + 1);
 
         Logger.log(`Product ${productId} hard-deleted by ${by}`);
@@ -1991,7 +1991,7 @@ function deleteProduct(e, auth) {
 }
 
 function stockIn(token, data) {
-  // ðŸ” AUTH
+  // 🔐 AUTH
   const auth = requireAuth(token);
   const by = auth.username;
 
@@ -1999,12 +1999,12 @@ function stockIn(token, data) {
   lock.waitLock(30000);
 
   try {
-  // ðŸ”’ FIX: à¹ƒà¸Šà¹‰ Spreadsheet à¹€à¸”à¸µà¸¢à¸§à¸—à¸±à¹‰à¸‡à¸£à¸°à¸šà¸š
+  // 🔒 FIX: ใช้ Spreadsheet เดียวทั้งระบบ
   const ss = getSS();
   const productSheet = ss.getSheetByName("Products");
   const logSheet = ss.getSheetByName("stock_logs");
 
-  // ðŸ” Validate input
+  // 🔍 Validate input
   if (!data.productId || !Number.isInteger(data.qty) || data.qty <= 0) {
     throw new Error("Invalid stock in data");
   }
@@ -2034,7 +2034,7 @@ function stockIn(token, data) {
       data.qty,              // qty
       before,                // before
       after,                 // after
-      by,                    // by (à¸ˆà¸²à¸ token)
+      by,                    // by (จาก token)
       "",                    // orderId
       data.reason || "",     // reason
       new Date()             // timestamp
@@ -2272,7 +2272,7 @@ function adminLogin(username, password) {
   if (!username || !password || password.length > PASSWORD_MAX_LENGTH) {
     return {
       success: false,
-      message: "Username à¸«à¸£à¸·à¸­ Password à¹„à¸¡à¹ˆà¸–à¸¹à¸à¸•à¹‰à¸­à¸‡"
+      message: "Username หรือ Password ไม่ถูกต้อง"
     };
   }
 
@@ -2298,7 +2298,7 @@ function adminLogin(username, password) {
   if (!adminRecord) {
     return {
       success: false,
-      message: "Username à¸«à¸£à¸·à¸­ Password à¹„à¸¡à¹ˆà¸–à¸¹à¸à¸•à¹‰à¸­à¸‡"
+      message: "Username หรือ Password ไม่ถูกต้อง"
     };
   }
 
@@ -2313,7 +2313,7 @@ function adminLogin(username, password) {
   ) {
     return {
       success: false,
-      message: "Username à¸«à¸£à¸·à¸­ Password à¹„à¸¡à¹ˆà¸–à¸¹à¸à¸•à¹‰à¸­à¸‡"
+      message: "Username หรือ Password ไม่ถูกต้อง"
     };
   }
 
@@ -2324,7 +2324,7 @@ function adminLogin(username, password) {
   if (!found) {
     return {
       success: false,
-      message: "Username à¸«à¸£à¸·à¸­ Password à¹„à¸¡à¹ˆà¸–à¸¹à¸à¸•à¹‰à¸­à¸‡"
+      message: "Username หรือ Password ไม่ถูกต้อง"
     };
   }
 
@@ -2359,7 +2359,7 @@ function adminLogin(username, password) {
     if (currentAdminIndex === -1) {
       return {
         success: false,
-        message: "Username à¸«à¸£à¸·à¸­ Password à¹„à¸¡à¹ˆà¸–à¸¹à¸à¸•à¹‰à¸­à¸‡"
+        message: "Username หรือ Password ไม่ถูกต้อง"
       };
     }
 
@@ -2549,7 +2549,7 @@ function requireAuth(token) {
 
   const lastRow = sheet.getLastRow();
 
-  // ðŸ”’ GUARD: à¹„à¸¡à¹ˆà¸¡à¸µ session à¸ˆà¸£à¸´à¸‡ (à¸¡à¸µà¹à¸•à¹ˆ header à¸«à¸£à¸·à¸­à¸§à¹ˆà¸²à¸‡)
+  // 🔒 GUARD: ไม่มี session จริง (มีแต่ header หรือว่าง)
   if (lastRow < 2) {
     throw new Error("Invalid token");
   }
@@ -2570,7 +2570,7 @@ function requireAuth(token) {
       return {
         username,
         token,
-        role: "admin", // ðŸ”’ à¹€à¸•à¸£à¸µà¸¢à¸¡à¹„à¸§à¹‰
+        role: "admin", // 🔒 เตรียมไว้
         expiredAt: new Date(expiredAt)
       };
     }
@@ -2622,7 +2622,7 @@ function cleanupExpiredSessions() {
 }
 
 function getOrders() {
-  // ðŸ”’ FIX: à¹ƒà¸Šà¹‰ Spreadsheet à¹€à¸”à¸µà¸¢à¸§à¸à¸±à¸šà¸—à¸±à¹‰à¸‡à¸£à¸°à¸šà¸š
+  // 🔒 FIX: ใช้ Spreadsheet เดียวกับทั้งระบบ
   const ss = getSS();
   const sheet = ss.getSheetByName("Orders");
 
@@ -2634,7 +2634,7 @@ function getOrders() {
 
   const rows = sheet.getDataRange().getValues();
 
-  // à¸¡à¸µà¹à¸•à¹ˆ header
+  // มีแต่ header
   if (rows.length < 2) {
     return [];
   }
@@ -2647,7 +2647,7 @@ function getOrders() {
       obj[h] = r[i];
     });
 
-    // ðŸ”§ parse items à¸ˆà¸²à¸ string â†’ array
+    // 🔧 parse items จาก string → array
     if (typeof obj.items === "string") {
       try {
         obj.items = JSON.parse(obj.items);
@@ -2737,7 +2737,7 @@ function addProduct(e, auth) {
   const rawCostPrice = String(e.parameter.costPrice ?? "").trim();
   const costPrice = rawCostPrice === "" ? null : Number(rawCostPrice);
   const stock  = Number(e.parameter.stock);
-  const active = true; // à¸ªà¸´à¸™à¸„à¹‰à¸²à¹ƒà¸«à¸¡à¹ˆà¹€à¸›à¸´à¸”à¸‚à¸²à¸¢à¹€à¸ªà¸¡à¸­
+  const active = true; // สินค้าใหม่เปิดขายเสมอ
   const image  = String(e.parameter.image || "").trim();
   let   status = String(e.parameter.status || "ready").trim();
   const note   = String(e.parameter.note || "").trim();
@@ -2756,7 +2756,7 @@ function addProduct(e, auth) {
     throw new Error("Price, cost price and stock must be >= 0");
   }
 
-  // ðŸ”’ auto status: stock = 0 â†’ out
+  // 🔒 auto status: stock = 0 → out
   if (stock === 0) {
     status = "out";
   }
@@ -2765,18 +2765,18 @@ function addProduct(e, auth) {
   lock.waitLock(30000);
 
   try {
-    // ðŸ”’ à¹ƒà¸Šà¹‰ Spreadsheet à¹€à¸”à¸µà¸¢à¸§à¸à¸±à¸šà¸—à¸±à¹‰à¸‡à¸£à¸°à¸šà¸š
+    // 🔒 ใช้ Spreadsheet เดียวกับทั้งระบบ
     const ss = getSS();
 
     const sh = ss.getSheetByName("Products");
     if (!sh) throw new Error("Products sheet not found");
     const productHeaders = ensureProductsVariantHeaders_(ss).headers;
 
-    // ðŸ†• LOG SHEET
+    // 🆕 LOG SHEET
     const logSheet = ss.getSheetByName("stock_logs");
     if (!logSheet) throw new Error("stock_logs sheet not found");
 
-    // ðŸ” à¸à¸±à¸™ SKU à¸‹à¹‰à¸³à¸ à¸²à¸¢à¹ƒà¸™ lock
+    // 🔍 กัน SKU ซ้ำภายใน lock
     const rows = sh.getDataRange().getValues();
     const exists = rows.slice(1).some(r => String(r[0]).trim() === id);
     if (exists) {
@@ -2793,7 +2793,7 @@ function addProduct(e, auth) {
       stock,       // D stock
       image,       // E image
       active,      // F active
-      status,      // G status  âœ… à¹€à¸žà¸´à¹ˆà¸¡à¹ƒà¸«à¸¡à¹ˆ
+      status,      // G status  ✅ เพิ่มใหม่
       new Date(),  // H createdAt
       by,          // I createdBy
       note,        // J note
