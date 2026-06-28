@@ -589,6 +589,11 @@ function doPost(e) {
       return json({ success: true, data: result });
     }
 
+    if (action === "updateProductPrice") {
+      const result = updateProductPrice(e, auth);
+      return json({ success: true, data: result });
+    }
+
     if (action === "bulkUpdateProducts") {
       return json(bulkUpdateProducts(e, auth));
     }
@@ -1936,6 +1941,50 @@ function updateProduct(e, auth) {
   } catch (err) {
     Logger.log("updateProduct error: " + err);
     throw err;
+  }
+}
+
+function updateProductPrice(e, auth) {
+  if (!auth || !auth.username) {
+    throw new Error("Unauthorized");
+  }
+
+  const productId = String(e.parameter.productId || "").trim();
+  const rawPrice = String(e.parameter.price ?? "").trim();
+  const price = Number(rawPrice);
+
+  if (!productId || rawPrice === "" || !Number.isInteger(price) || price < 0) {
+    throw new Error("Invalid product price");
+  }
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+
+  try {
+    const ss = getSS();
+    const sheet = ss.getSheetByName("Products");
+    if (!sheet) {
+      throw new Error("Products sheet not found");
+    }
+
+    const rows = sheet.getDataRange().getValues();
+    for (let i = 1; i < rows.length; i++) {
+      if (String(rows[i][0] || "").trim() === productId) {
+        const oldPrice = Number(rows[i][2]) || 0;
+        sheet.getRange(i + 1, 3).setValue(price);
+        CacheService.getScriptCache().remove(PUBLIC_PRODUCTS_CACHE_KEY);
+        return {
+          success: true,
+          productId,
+          oldPrice,
+          price
+        };
+      }
+    }
+
+    throw new Error("Product not found");
+  } finally {
+    lock.releaseLock();
   }
 }
 

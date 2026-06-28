@@ -4161,6 +4161,14 @@ const UI_TEXT = {
     stockAdjustError: "ไม่สามารถปรับสต๊อกได้",
     productStatus: "สถานะสินค้า",
     sellPrice: "ราคาขาย",
+    changeSalePrice: "เปลี่ยนราคาขาย",
+    oldSalePrice: "ราคาขายเดิม",
+    newSalePrice: "ราคาขายใหม่",
+    salePriceChangeWarning: "ราคานี้จะมีผลกับออเดอร์ใหม่เท่านั้น ออเดอร์เก่าจะยังใช้ราคาที่บันทึกไว้ตอนสั่งซื้อ",
+    cartLatestPriceWarning: "ราคาสินค้าอาจเปลี่ยนได้ ระบบจะยืนยันราคาล่าสุดตอนส่งคำสั่งซื้อ",
+    saveSalePrice: "บันทึกราคาขาย",
+    salePriceUpdated: "เปลี่ยนราคาขายเรียบร้อยแล้ว",
+    salePriceUpdateFailed: "เปลี่ยนราคาขายไม่สำเร็จ",
     costPriceAdmin: "ราคาต้นทุน",
     bulkFieldPrice: "ราคาขาย",
     bulkFieldCostPrice: "ต้นทุน",
@@ -4881,6 +4889,14 @@ const UI_TEXT = {
     stockAdjustError: "Could not adjust stock",
     productStatus: "Product status",
     sellPrice: "Selling price",
+    changeSalePrice: "Change selling price",
+    oldSalePrice: "Old selling price",
+    newSalePrice: "New selling price",
+    salePriceChangeWarning: "This price applies to new orders only. Old orders will keep the price saved when the order was created.",
+    cartLatestPriceWarning: "Product prices may change. The system will confirm the latest price when the order is submitted.",
+    saveSalePrice: "Save selling price",
+    salePriceUpdated: "Selling price updated",
+    salePriceUpdateFailed: "Could not update selling price",
     costPriceAdmin: "Cost price",
     bulkFieldPrice: "Selling price",
     bulkFieldCostPrice: "Cost price",
@@ -7637,6 +7653,9 @@ cartSheet.innerHTML += `
       <strong>฿${total}</strong>
     </div>
   </div>
+  <div class="helper-text" style="margin-top:8px">
+    ${t("cartLatestPriceWarning", "ราคาสินค้าอาจเปลี่ยนได้ ระบบจะยืนยันราคาล่าสุดตอนส่งคำสั่งซื้อ")}
+  </div>
   <div class="sheet-action-footer">
     <button class="btn btn-primary"
       onclick="openConfirm()">
@@ -7701,6 +7720,9 @@ function renderConfirmSheet(){
         <span>${t("total", "ยอดรวม")}</span>
         <strong>฿${total}</strong>
       </div>
+    </div>
+    <div class="helper-text" style="margin-top:8px">
+      ${t("cartLatestPriceWarning", "ราคาสินค้าอาจเปลี่ยนได้ ระบบจะยืนยันราคาล่าสุดตอนส่งคำสั่งซื้อ")}
     </div>
 
     <div class="form-group">
@@ -14946,6 +14968,134 @@ async function confirmDuplicatePoBeforeCreateOrder(poNumber) {
 }
 
 
+function openProductPriceChange(productId){
+  if (state.mode !== "admin" || !state.admin?.loggedIn || !state.admin?.token) return;
+
+  const normalizedProductId = normalizeProductId(productId);
+  const product =
+    (Array.isArray(state.products) ? state.products : []).find(
+      item => normalizeProductId(item?.productId) === normalizedProductId
+    ) || state.selectedProduct;
+
+  if (!product || normalizeProductId(product.productId) !== normalizedProductId) {
+    showToast(t("productNotFound", "ไม่พบสินค้า {name}"), "warning");
+    return;
+  }
+
+  state.selectedProduct = product;
+
+  const currentPrice = Number(product.price || 0);
+  const currentPriceText = currentPrice.toLocaleString("th-TH");
+
+  adminProductActionSheet.innerHTML = `
+    <div class="sheet-topbar">
+      <button class="btn btn-outline sheet-nav-btn"
+        onclick="closeProductPriceChange()"
+        aria-label="${t("close", "ปิด")}">×</button>
+      <h3 id="adminProductActionSheetTitle">${t("changeSalePrice", "เปลี่ยนราคาขาย")}</h3>
+      <div aria-hidden="true"></div>
+    </div>
+
+    <div class="admin-detail-section">
+      <div class="admin-detail-title">${esc(product.name || "-")}</div>
+      <div class="admin-product-summary-meta" style="margin-top:10px">
+        <span>SKU: ${esc(product.productId || "-")}</span>
+        <span>${t("oldSalePrice", "ราคาขายเดิม")} ฿${currentPriceText}</span>
+      </div>
+    </div>
+
+    <div class="admin-detail-section">
+      <div class="helper-text" style="margin-bottom:10px">
+        ${t("salePriceChangeWarning", "ราคานี้จะมีผลกับออเดอร์ใหม่เท่านั้น ออเดอร์เก่าจะยังใช้ราคาที่บันทึกไว้ตอนสั่งซื้อ")}
+      </div>
+      <div class="form-group">
+        <label for="priceChangeInput">${t("newSalePrice", "ราคาขายใหม่")}</label>
+        <input id="priceChangeInput" type="number" min="0" step="1" value="${escAttr(currentPrice)}">
+      </div>
+    </div>
+
+    <div class="sheet-action-footer">
+      <button id="priceChangeSubmitButton" class="btn btn-primary"
+        onclick="submitProductPriceChange(${toInlineJsStringLiteral(product.productId || "")})">
+        ${t("saveSalePrice", "บันทึกราคาขาย")}
+      </button>
+      <button class="btn btn-outline" onclick="closeProductPriceChange()">
+        ${t("cancel", "ยกเลิก")}
+      </button>
+    </div>
+  `;
+
+  openOverlay(adminProductActionSheet);
+
+  setTimeout(() => {
+    const input = document.getElementById("priceChangeInput");
+    if (input) {
+      input.focus();
+      input.select();
+    }
+  }, 100);
+}
+
+function closeProductPriceChange(){
+  closeOverlay(adminProductActionSheet);
+}
+
+async function submitProductPriceChange(productId){
+  if (state.admin.isSubmitting) return;
+  if (state.mode !== "admin" || !state.admin?.token || isAdminSessionExpired()) {
+    showToast(t("sessionExpiredLoginAgain", "Session หมดอายุ กรุณา login ใหม่"), "warning");
+    exitAdmin();
+    return;
+  }
+
+  const input = document.getElementById("priceChangeInput");
+  const rawPrice = String(input?.value ?? "").trim();
+  const price = Number(rawPrice);
+
+  if (rawPrice === "" || !Number.isInteger(price) || price < 0) {
+    showToast(t("bulkImportPriceInvalid", "ราคาต้องเป็นตัวเลขจำนวนเต็ม 0 ขึ้นไป"), "error");
+    if (input) input.focus();
+    return;
+  }
+
+  const button = document.getElementById("priceChangeSubmitButton");
+  state.admin.isSubmitting = true;
+  if (button) button.disabled = true;
+
+  try {
+    showLoading(t("savingCostSalePrices", "กำลังบันทึกราคา..."));
+
+    const form = new URLSearchParams();
+    form.append("action", "updateProductPrice");
+    form.append("token", state.admin.token);
+    form.append("productId", normalizeProductId(productId));
+    form.append("price", price);
+
+    await postFormAction(form);
+
+    const normalizedProductId = normalizeProductId(productId);
+    (Array.isArray(state.products) ? state.products : []).forEach(product => {
+      if (normalizeProductId(product?.productId) === normalizedProductId) {
+        product.price = price;
+      }
+    });
+    if (state.selectedProduct && normalizeProductId(state.selectedProduct.productId) === normalizedProductId) {
+      state.selectedProduct.price = price;
+    }
+
+    showToast(t("salePriceUpdated", "เปลี่ยนราคาขายเรียบร้อยแล้ว"), "success");
+    await refreshProducts();
+    closeProductPriceChange();
+  } catch (err) {
+    console.error(err);
+    showToast(err.message || t("salePriceUpdateFailed", "เปลี่ยนราคาขายไม่สำเร็จ"), "error");
+  } finally {
+    state.admin.isSubmitting = false;
+    if (button) button.disabled = false;
+    safeHideLoading();
+  }
+}
+
 function openAdminProductAction(p){
   // 🔒 guard
   if (state.mode !== "admin") return;
@@ -14971,6 +15121,16 @@ function openAdminProductAction(p){
         openProductEditById(${toInlineJsStringLiteral(p.productId)});
       ">
       ${t("editProduct", "แก้ไขข้อมูลสินค้า")}
+    </button>
+
+    <!-- 💸 CHANGE SALE PRICE -->
+    <button class="btn btn-secondary"
+      style="width:100%;margin-bottom:10px"
+      onclick="
+        closeAdminProductAction();
+        openProductPriceChange(${toInlineJsStringLiteral(p.productId)});
+      ">
+      ${t("changeSalePrice", "เปลี่ยนราคาขาย")}
     </button>
 
     <!-- 📦 STOCK -->
