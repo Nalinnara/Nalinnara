@@ -618,6 +618,26 @@ body[data-theme="cute"] .shop-subtitle{
     color:var(--muted);
   }
 
+  .price-round-list{
+    display:grid;
+    gap:6px;
+    margin-bottom:12px;
+  }
+
+  .price-round-row{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    padding:8px 10px;
+    border:1px solid var(--border);
+    border-radius:8px;
+    background:var(--surface);
+    color:var(--text);
+    font-size:13px;
+    line-height:1.35;
+  }
+
   .info-card{
     margin-top:12px;
     display:grid;
@@ -4166,6 +4186,10 @@ const UI_TEXT = {
     newSalePrice: "ราคาขายใหม่",
     salePriceNoteLabel: "หมายเหตุการเปลี่ยนราคา",
     salePriceNotePlaceholder: "เช่น ลดราคาเคลียร์สต๊อก / รอบขายใหม่ / โปรโมชัน",
+    salePriceRoundsTitle: "รอบราคาขาย",
+    salePriceRoundsLoading: "กำลังโหลดรอบราคา...",
+    salePriceRoundsLoadFailed: "โหลดรอบราคาไม่สำเร็จ",
+    salePriceRoundLine: "รอบ {round} ราคา {price}",
     salePriceChangeWarning: "ราคานี้จะมีผลกับออเดอร์ใหม่เท่านั้น ออเดอร์เก่าจะยังใช้ราคาที่บันทึกไว้ตอนสั่งซื้อ",
     cartLatestPriceWarning: "ราคาสินค้าอาจเปลี่ยนได้ ระบบจะยืนยันราคาล่าสุดตอนส่งคำสั่งซื้อ",
     saveSalePrice: "บันทึกราคาขาย",
@@ -4897,6 +4921,10 @@ const UI_TEXT = {
     newSalePrice: "New selling price",
     salePriceNoteLabel: "Price change note",
     salePriceNotePlaceholder: "For example clearance markdown / new selling round / promotion",
+    salePriceRoundsTitle: "Selling price rounds",
+    salePriceRoundsLoading: "Loading price rounds...",
+    salePriceRoundsLoadFailed: "Could not load price rounds",
+    salePriceRoundLine: "Round {round} price {price}",
     salePriceChangeWarning: "This price applies to new orders only. Old orders will keep the price saved when the order was created.",
     cartLatestPriceWarning: "Product prices may change. The system will confirm the latest price when the order is submitted.",
     saveSalePrice: "Save selling price",
@@ -14974,6 +15002,73 @@ async function confirmDuplicatePoBeforeCreateOrder(poNumber) {
 }
 
 
+function formatSalePriceRoundPrice(value){
+  const price = Number(value);
+  const safePrice = Number.isFinite(price) ? price : 0;
+  return `฿${safePrice.toLocaleString("th-TH")}`;
+}
+
+function buildProductPriceRounds(logs, currentPrice){
+  const sortedLogs = (Array.isArray(logs) ? logs : [])
+    .map((log, index) => ({
+      ...log,
+      _index: index
+    }))
+    .sort((a, b) => {
+      const aTime = Date.parse(a.changedAt || "");
+      const bTime = Date.parse(b.changedAt || "");
+      const safeATime = Number.isFinite(aTime) ? aTime : 0;
+      const safeBTime = Number.isFinite(bTime) ? bTime : 0;
+      return safeATime - safeBTime || a._index - b._index;
+    });
+
+  if (!sortedLogs.length) {
+    return [Number(currentPrice) || 0];
+  }
+
+  return [
+    Number(sortedLogs[0].oldPrice) || 0,
+    ...sortedLogs.map(log => Number(log.newPrice) || 0)
+  ];
+}
+
+function renderProductPriceRounds(logs, currentPrice){
+  const host = document.getElementById("priceRoundListHost");
+  if (!host) return;
+
+  const rounds = buildProductPriceRounds(logs, currentPrice);
+  host.innerHTML = rounds
+    .map((price, index) => `
+      <div class="price-round-row">
+        <span>${esc(formatUiText("salePriceRoundLine", {
+          round: index + 1,
+          price: formatSalePriceRoundPrice(price)
+        }, "รอบ {round} ราคา {price}"))}</span>
+      </div>
+    `)
+    .join("");
+}
+
+async function refreshProductPriceRounds(productId, currentPrice){
+  const host = document.getElementById("priceRoundListHost");
+  if (!host || state.mode !== "admin" || !state.admin?.token) return;
+
+  host.innerHTML = `<div class="helper-text">${t("salePriceRoundsLoading", "กำลังโหลดรอบราคา...")}</div>`;
+
+  try {
+    const form = new URLSearchParams();
+    form.append("action", "getProductPriceLogs");
+    form.append("token", state.admin.token);
+    form.append("productId", normalizeProductId(productId));
+
+    const json = await postFormAction(form);
+    renderProductPriceRounds(Array.isArray(json?.data) ? json.data : [], currentPrice);
+  } catch (err) {
+    console.warn("refreshProductPriceRounds failed:", err);
+    host.innerHTML = `<div class="helper-text">${t("salePriceRoundsLoadFailed", "โหลดรอบราคาไม่สำเร็จ")}</div>`;
+  }
+}
+
 function openProductPriceChange(productId){
   if (state.mode !== "admin" || !state.admin?.loggedIn || !state.admin?.token) return;
 
@@ -15006,13 +15101,17 @@ function openProductPriceChange(productId){
       <div class="admin-detail-title">${esc(product.name || "-")}</div>
       <div class="admin-product-summary-meta" style="margin-top:10px">
         <span>SKU: ${esc(product.productId || "-")}</span>
-        <span>${t("oldSalePrice", "ราคาขายเดิม")} ฿${currentPriceText}</span>
+        <span>${t("oldSalePrice", "ราคาขายเดิม")} <span id="priceChangeCurrentPriceText">฿${currentPriceText}</span></span>
       </div>
     </div>
 
     <div class="admin-detail-section">
       <div class="helper-text" style="margin-bottom:10px">
         ${t("salePriceChangeWarning", "ราคานี้จะมีผลกับออเดอร์ใหม่เท่านั้น ออเดอร์เก่าจะยังใช้ราคาที่บันทึกไว้ตอนสั่งซื้อ")}
+      </div>
+      <div class="admin-detail-title">${t("salePriceRoundsTitle", "รอบราคาขาย")}</div>
+      <div id="priceRoundListHost" class="price-round-list" aria-live="polite">
+        <div class="helper-text">${t("salePriceRoundsLoading", "กำลังโหลดรอบราคา...")}</div>
       </div>
       <div class="form-group">
         <label for="priceChangeInput">${t("newSalePrice", "ราคาขายใหม่")}</label>
@@ -15037,6 +15136,7 @@ function openProductPriceChange(productId){
   `;
 
   openOverlay(adminProductActionSheet);
+  refreshProductPriceRounds(product.productId || "", currentPrice);
 
   setTimeout(() => {
     const input = document.getElementById("priceChangeInput");
@@ -15107,7 +15207,13 @@ async function submitProductPriceChange(productId){
       : t("salePriceUpdated", "เปลี่ยนราคาขายเรียบร้อยแล้ว");
     showToast(successMessage, "success");
     await refreshProducts();
-    closeProductPriceChange();
+    const currentPriceText = document.getElementById("priceChangeCurrentPriceText");
+    if (currentPriceText) {
+      currentPriceText.textContent = `฿${price.toLocaleString("th-TH")}`;
+    }
+    if (input) input.value = String(price);
+    if (noteInput) noteInput.value = "";
+    await refreshProductPriceRounds(normalizedProductId, price);
   } catch (err) {
     console.error(err);
     showToast(err.message || t("salePriceUpdateFailed", "เปลี่ยนราคาขายไม่สำเร็จ"), "error");

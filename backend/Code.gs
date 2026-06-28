@@ -604,6 +604,13 @@ function doPost(e) {
       });
     }
 
+    if (action === "getProductPriceLogs") {
+      return json({
+        success: true,
+        data: getProductPriceLogs(e, auth)
+      });
+    }
+
 
 
     /* ========= ADMIN WRITE ========= */
@@ -2065,6 +2072,76 @@ function updateProductPrice(e, auth) {
   } finally {
     lock.releaseLock();
   }
+}
+
+function getProductPriceLogs(e, auth) {
+  if (!auth || !auth.username) {
+    throw new Error("Unauthorized");
+  }
+
+  const productId = String(e.parameter.productId || "").trim();
+  if (!productId) {
+    throw new Error("Missing productId");
+  }
+
+  const ss = getSS();
+  const sheet = ss.getSheetByName("price_logs");
+  if (!sheet || sheet.getLastRow() < 2) {
+    return [];
+  }
+
+  const headers = sheet
+    .getRange(1, 1, 1, PRICE_LOG_HEADERS.length)
+    .getValues()[0]
+    .map(header => String(header || "").trim());
+
+  const matches = PRICE_LOG_HEADERS.every((header, index) =>
+    headers[index] === header
+  );
+  if (!matches) {
+    throw new Error("price_logs schema mismatch");
+  }
+
+  const rows = sheet
+    .getRange(2, 1, sheet.getLastRow() - 1, PRICE_LOG_HEADERS.length)
+    .getValues();
+  const targetProductId = productId.toUpperCase();
+
+  return rows
+    .map((row, index) => {
+      const log = {};
+      PRICE_LOG_HEADERS.forEach((header, columnIndex) => {
+        log[header] = row[columnIndex];
+      });
+      log._rowIndex = index;
+      return log;
+    })
+    .filter(log =>
+      String(log.productId || "").trim().toUpperCase() === targetProductId
+    )
+    .sort((a, b) => {
+      const aTime = a.changedAt instanceof Date
+        ? a.changedAt.getTime()
+        : Date.parse(a.changedAt);
+      const bTime = b.changedAt instanceof Date
+        ? b.changedAt.getTime()
+        : Date.parse(b.changedAt);
+      const safeATime = Number.isFinite(aTime) ? aTime : 0;
+      const safeBTime = Number.isFinite(bTime) ? bTime : 0;
+      return safeATime - safeBTime || a._rowIndex - b._rowIndex;
+    })
+    .slice(-50)
+    .map(log => ({
+      id: String(log.id || ""),
+      productId: String(log.productId || ""),
+      productName: String(log.productName || ""),
+      oldPrice: Number(log.oldPrice) || 0,
+      newPrice: Number(log.newPrice) || 0,
+      note: String(log.note || ""),
+      changedBy: String(log.changedBy || ""),
+      changedAt: log.changedAt || "",
+      source: String(log.source || "")
+    }));
 }
 
 function deleteProduct(e, auth) {
