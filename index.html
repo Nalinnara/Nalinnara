@@ -4164,10 +4164,13 @@ const UI_TEXT = {
     changeSalePrice: "เปลี่ยนราคาขาย",
     oldSalePrice: "ราคาขายเดิม",
     newSalePrice: "ราคาขายใหม่",
+    salePriceNoteLabel: "หมายเหตุการเปลี่ยนราคา",
+    salePriceNotePlaceholder: "เช่น ลดราคาเคลียร์สต๊อก / รอบขายใหม่ / โปรโมชัน",
     salePriceChangeWarning: "ราคานี้จะมีผลกับออเดอร์ใหม่เท่านั้น ออเดอร์เก่าจะยังใช้ราคาที่บันทึกไว้ตอนสั่งซื้อ",
     cartLatestPriceWarning: "ราคาสินค้าอาจเปลี่ยนได้ ระบบจะยืนยันราคาล่าสุดตอนส่งคำสั่งซื้อ",
     saveSalePrice: "บันทึกราคาขาย",
     salePriceUpdated: "เปลี่ยนราคาขายเรียบร้อยแล้ว",
+    salePriceUpdatedDetail: "เปลี่ยนราคาขายจาก {oldPrice} เป็น {newPrice} แล้ว",
     salePriceUpdateFailed: "เปลี่ยนราคาขายไม่สำเร็จ",
     costPriceAdmin: "ราคาต้นทุน",
     bulkFieldPrice: "ราคาขาย",
@@ -4892,10 +4895,13 @@ const UI_TEXT = {
     changeSalePrice: "Change selling price",
     oldSalePrice: "Old selling price",
     newSalePrice: "New selling price",
+    salePriceNoteLabel: "Price change note",
+    salePriceNotePlaceholder: "For example clearance markdown / new selling round / promotion",
     salePriceChangeWarning: "This price applies to new orders only. Old orders will keep the price saved when the order was created.",
     cartLatestPriceWarning: "Product prices may change. The system will confirm the latest price when the order is submitted.",
     saveSalePrice: "Save selling price",
     salePriceUpdated: "Selling price updated",
+    salePriceUpdatedDetail: "Changed selling price from {oldPrice} to {newPrice}",
     salePriceUpdateFailed: "Could not update selling price",
     costPriceAdmin: "Cost price",
     bulkFieldPrice: "Selling price",
@@ -15012,6 +15018,11 @@ function openProductPriceChange(productId){
         <label for="priceChangeInput">${t("newSalePrice", "ราคาขายใหม่")}</label>
         <input id="priceChangeInput" type="number" min="0" step="1" value="${escAttr(currentPrice)}">
       </div>
+      <div class="form-group">
+        <label for="priceChangeNoteInput">${t("salePriceNoteLabel", "หมายเหตุการเปลี่ยนราคา")}</label>
+        <textarea id="priceChangeNoteInput" rows="3" maxlength="500"
+          placeholder="${escAttr(t("salePriceNotePlaceholder", "เช่น ลดราคาเคลียร์สต๊อก / รอบขายใหม่ / โปรโมชัน"))}"></textarea>
+      </div>
     </div>
 
     <div class="sheet-action-footer">
@@ -15049,8 +15060,10 @@ async function submitProductPriceChange(productId){
   }
 
   const input = document.getElementById("priceChangeInput");
+  const noteInput = document.getElementById("priceChangeNoteInput");
   const rawPrice = String(input?.value ?? "").trim();
   const price = Number(rawPrice);
+  const note = String(noteInput?.value ?? "").trim();
 
   if (rawPrice === "" || !Number.isInteger(price) || price < 0) {
     showToast(t("bulkImportPriceInvalid", "ราคาต้องเป็นตัวเลขจำนวนเต็ม 0 ขึ้นไป"), "error");
@@ -15070,8 +15083,11 @@ async function submitProductPriceChange(productId){
     form.append("token", state.admin.token);
     form.append("productId", normalizeProductId(productId));
     form.append("price", price);
+    form.append("note", note);
 
-    await postFormAction(form);
+    const json = await postFormAction(form);
+    const oldPrice = Number(json?.data?.oldPrice);
+    const newPrice = Number(json?.data?.newPrice ?? json?.data?.price ?? price);
 
     const normalizedProductId = normalizeProductId(productId);
     (Array.isArray(state.products) ? state.products : []).forEach(product => {
@@ -15083,7 +15099,13 @@ async function submitProductPriceChange(productId){
       state.selectedProduct.price = price;
     }
 
-    showToast(t("salePriceUpdated", "เปลี่ยนราคาขายเรียบร้อยแล้ว"), "success");
+    const successMessage = Number.isFinite(oldPrice) && Number.isFinite(newPrice)
+      ? formatUiText("salePriceUpdatedDetail", {
+          oldPrice: `฿${oldPrice.toLocaleString("th-TH")}`,
+          newPrice: `฿${newPrice.toLocaleString("th-TH")}`
+        }, "เปลี่ยนราคาขายจาก {oldPrice} เป็น {newPrice} แล้ว")
+      : t("salePriceUpdated", "เปลี่ยนราคาขายเรียบร้อยแล้ว");
+    showToast(successMessage, "success");
     await refreshProducts();
     closeProductPriceChange();
   } catch (err) {

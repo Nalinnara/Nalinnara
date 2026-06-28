@@ -16,6 +16,18 @@ const PRODUCT_OPTIONAL_VARIANT_HEADERS = Object.freeze([
   "variantSortOrder"
 ]);
 
+const PRICE_LOG_HEADERS = Object.freeze([
+  "id",
+  "productId",
+  "productName",
+  "oldPrice",
+  "newPrice",
+  "note",
+  "changedBy",
+  "changedAt",
+  "source"
+]);
+
 
 function ensureSheetWithHeaders_(ss, sheetName, expectedHeaders) {
   if (!ss) {
@@ -64,6 +76,51 @@ function ensureSheetWithHeaders_(ss, sheetName, expectedHeaders) {
     created,
     initialized: false
   };
+}
+
+function ensurePriceLogsSheet_(ss) {
+  if (!ss) {
+    throw new Error("Spreadsheet is required");
+  }
+
+  const sheetName = "price_logs";
+  let sheet = ss.getSheetByName(sheetName);
+
+  if (!sheet) {
+    sheet = ss.insertSheet(sheetName);
+  }
+
+  if (sheet.getLastRow() === 0) {
+    sheet
+      .getRange(1, 1, 1, PRICE_LOG_HEADERS.length)
+      .setValues([PRICE_LOG_HEADERS]);
+    sheet.setFrozenRows(1);
+    return sheet;
+  }
+
+  const actualHeaders = sheet
+    .getRange(1, 1, 1, PRICE_LOG_HEADERS.length)
+    .getValues()[0]
+    .map(header => String(header || "").trim());
+
+  const emptyHeader = actualHeaders.every(header => !header);
+  if (emptyHeader) {
+    sheet
+      .getRange(1, 1, 1, PRICE_LOG_HEADERS.length)
+      .setValues([PRICE_LOG_HEADERS]);
+    sheet.setFrozenRows(1);
+    return sheet;
+  }
+
+  const matches = PRICE_LOG_HEADERS.every((header, index) =>
+    actualHeaders[index] === header
+  );
+
+  if (!matches) {
+    throw new Error(sheetName + " schema mismatch");
+  }
+
+  return sheet;
 }
 
 function ensureOrdersExtendedHeaders_(ss) {
@@ -1952,6 +2009,7 @@ function updateProductPrice(e, auth) {
   const productId = String(e.parameter.productId || "").trim();
   const rawPrice = String(e.parameter.price ?? "").trim();
   const price = Number(rawPrice);
+  const note = String(e.parameter.note ?? "").trim();
 
   if (!productId || rawPrice === "" || !Number.isInteger(price) || price < 0) {
     throw new Error("Invalid product price");
@@ -1966,18 +2024,39 @@ function updateProductPrice(e, auth) {
     if (!sheet) {
       throw new Error("Products sheet not found");
     }
+    const priceLogSheet = ensurePriceLogsSheet_(ss);
 
     const rows = sheet.getDataRange().getValues();
     for (let i = 1; i < rows.length; i++) {
       if (String(rows[i][0] || "").trim() === productId) {
-        const oldPrice = Number(rows[i][2]) || 0;
+        const originalPrice = rows[i][2];
+        const oldPrice = Number(originalPrice) || 0;
+        const productName = String(rows[i][1] || "").trim();
         sheet.getRange(i + 1, 3).setValue(price);
+        try {
+          priceLogSheet.appendRow([
+            "PL-" + Utilities.getUuid(),
+            productId,
+            productName,
+            oldPrice,
+            price,
+            note,
+            auth.username || "admin",
+            new Date(),
+            "manual_price_change"
+          ]);
+        } catch (logErr) {
+          sheet.getRange(i + 1, 3).setValue(originalPrice);
+          throw logErr;
+        }
         CacheService.getScriptCache().remove(PUBLIC_PRODUCTS_CACHE_KEY);
         return {
           success: true,
           productId,
+          productName,
           oldPrice,
-          price
+          price,
+          newPrice: price
         };
       }
     }
